@@ -12,10 +12,19 @@ struct zu_scene {
 	size_t n_objects, a_objects;
 
 	mat44 cam;
-	GLuint vao, shader;
+	GLuint vao;
+
 	struct {
-		GLint mvp, obj_color;
-	} uniform;
+		struct {
+			GLuint id;
+			GLint mvp, obj_clr;
+		} obj_clr;
+
+		struct {
+			GLuint id;
+			GLint mvp;
+		} vert_clr;
+	} shader;
 
 	// TODO: materials
 	// TODO: textures
@@ -30,12 +39,12 @@ struct zu_obj {
 	_Bool hide;
 
 	mat44 transform; // Object space -> world space
-
-	GLfloat *triangles;
-	size_t n_triangles;
-	GLuint vtx_buf;
-
 	vec4 color;
+
+	size_t n_triangles;
+	GLfloat *vert;
+	GLfloat *vert_clr;
+	GLuint vert_buf, vert_clr_buf;
 
 	// TODO: materials
 	// TODO: UVs
@@ -51,6 +60,7 @@ struct zu_obj {
 struct zu_obj *zu_obj_new(struct zu_scene *scene);
 void zu_obj_del(struct zu_obj *obj);
 GLfloat *zu_obj_geom(struct zu_obj *obj, size_t n_triangles);
+GLfloat *zu_obj_vert_clr(struct zu_obj *obj);
 int zu_obj_upload(struct zu_obj *obj);
 
 #endif

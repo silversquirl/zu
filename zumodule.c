@@ -106,12 +106,42 @@ static PyObject *obj_geom(PyObject *self, PyObject *args) {
 	if (verts_len < 0) return NULL;
 
 	// 3 vertices per triangle, 3 components per vertex
-	if (verts_len % 9) {
+	if (verts_len % (3*3)) {
 		PyErr_SetString(PyExc_ValueError, "Length of `verts' must be a multiple of 9");
 		return NULL;
 	}
 
 	GLfloat *buf = zu_obj_geom(obj, verts_len/9);
+	if (!buf) return PyErr_NoMemory();
+
+	for (Py_ssize_t i = 0; i < verts_len; i++) {
+		PyObject *item = PyList_GET_ITEM(verts, i);
+		double value = PyFloat_AsDouble(item);
+		if (value == -1.0 && PyErr_Occurred()) return NULL;
+		buf[i] = value;
+	}
+
+	return Py_None;
+}
+
+static PyObject *obj_vert_clr(PyObject *self, PyObject *args) {
+	PyObject *pyobj, *verts;
+	if (!PyArg_ParseTuple(args, "OO", &pyobj, &verts)) return NULL;
+
+	struct zu_obj *obj = PyCapsule_GetPointer(pyobj, OBJ_NAME);
+	if (!obj) return NULL;
+
+	Py_ssize_t verts_len = PyList_Size(verts);
+	if (verts_len < 0) return NULL;
+
+	// 3 vertices per triangle, 4 components per vertex
+	if ((size_t)verts_len != 3*4*obj->n_triangles) {
+		PyErr_Format(PyExc_ValueError, "`verts' should be length %d, got %d", 3*4*obj->n_triangles, verts_len);
+		return NULL;
+	}
+
+	GLfloat *buf = zu_obj_vert_clr(obj);
+	if (!buf) return PyErr_NoMemory();
 
 	for (Py_ssize_t i = 0; i < verts_len; i++) {
 		PyObject *item = PyList_GET_ITEM(verts, i);
@@ -191,6 +221,7 @@ PyMethodDef methods[] = {
 	{"obj_new", obj_new, METH_O, PyDoc_STR("Create a new Zu object linked to the specified scene")},
 	{"obj_transform", obj_transform, METH_VARARGS, PyDoc_STR("Set the transformation of a Zu object")},
 	{"obj_geom", obj_geom, METH_VARARGS, PyDoc_STR("Set the geometry of a Zu object. Takes a Zu object and a list of floats. Each sequence of 9 floats represents one triangle")},
+	{"obj_vert_clr", obj_vert_clr, METH_VARARGS, PyDoc_STR("Set the vertex colors of a Zu object. Takes a Zu object and a list of floats")},
 	{"obj_color", obj_color, METH_VARARGS, PyDoc_STR("Set the object color of a Zu object")},
 	{"obj_hide", obj_hide, METH_O, PyDoc_STR("Hide a Zu object from the render. This is provided because there is no way to safely delete an object from Python")},
 	{"obj_upload", obj_upload, METH_O, PyDoc_STR("Upload a Zu object to the GPU")},

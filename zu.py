@@ -26,14 +26,26 @@ def update_obj_geom(zu_obj, bl_obj):
 	mesh = bl_obj.to_mesh()
 	mesh.calc_loop_triangles()
 
-	vertices = []
+	vert = []
+	if mesh.vertex_colors.active is not None:
+		vert_clr = []
+	else:
+		vert_clr = None
+
 	for tri in mesh.loop_triangles:
 		for i in tri.loops:
 			loop = mesh.loops[i]
-			vert = mesh.vertices[loop.vertex_index]
-			vertices += list(vert.co)
 
-	zu.obj_geom(zu_obj, vertices)
+			vert += list(mesh.vertices[loop.vertex_index].co)
+
+			if vert_clr is not None:
+				color = mesh.vertex_colors.active.data[i]
+				vert_clr += list(color.color)
+
+	zu.obj_geom(zu_obj, vert)
+	if vert_clr is not None:
+		zu.obj_vert_clr(zu_obj, vert_clr)
+	zu.obj_upload(zu_obj)
 
 class ZuRenderEngine(bpy.types.RenderEngine):
 	bl_idname = 'ZU'
@@ -62,11 +74,16 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 			bgl.glGenTextures(1, buf)
 			tex = buf[0]
 			bgl.glBindTexture(bgl.GL_TEXTURE_RECTANGLE, tex)
-			bgl.glTexImage2D(bgl.GL_TEXTURE_RECTANGLE, 0, bgl.GL_RGBA, width, height, 0, bgl.GL_RGBA, bgl.GL_FLOAT, None);
-			bgl.glTexParameteri(bgl.GL_TEXTURE_RECTANGLE, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_NEAREST);
-			bgl.glTexParameteri(bgl.GL_TEXTURE_RECTANGLE, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_NEAREST);
-
+			bgl.glTexImage2D(bgl.GL_TEXTURE_RECTANGLE, 0, bgl.GL_RGBA, width, height, 0, bgl.GL_RGBA, bgl.GL_FLOAT, None)
+			bgl.glTexParameteri(bgl.GL_TEXTURE_RECTANGLE, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_NEAREST)
+			bgl.glTexParameteri(bgl.GL_TEXTURE_RECTANGLE, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_NEAREST)
 			bgl.glFramebufferTexture(bgl.GL_FRAMEBUFFER, bgl.GL_COLOR_ATTACHMENT0, tex, 0);
+
+			bgl.glGenRenderbuffers(1, buf)
+			depth = buf[0]
+			bgl.glBindRenderbuffer(bgl.GL_RENDERBUFFER, depth)
+			bgl.glRenderbufferStorage(bgl.GL_RENDERBUFFER, bgl.GL_DEPTH_COMPONENT, width, height)
+			bgl.glFramebufferRenderbuffer(bgl.GL_FRAMEBUFFER, bgl.GL_DEPTH_ATTACHMENT, bgl.GL_RENDERBUFFER, depth)
 
 			status = bgl.glCheckFramebufferStatus(bgl.GL_FRAMEBUFFER)
 			if status == 0:
@@ -103,6 +120,8 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 			# Clean up OpenGL stuff
 			buf[0] = tex
 			bgl.glDeleteTextures(1, buf)
+			buf[0] = depth
+			bgl.glDeleteRenderbuffers(1, buf)
 			buf[0] = fb
 			bgl.glDeleteFramebuffers(1, buf)
 
@@ -127,7 +146,6 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 			zu_obj = zu.obj_new(self.scene)
 
 			update_obj_geom(zu_obj, obj)
-			zu.obj_upload(zu_obj)
 			zu.obj_transform(zu_obj, mat(obj.matrix_world))
 			zu.obj_color(zu_obj, list(obj.color))
 			self.objects[obj.name_full] = zu_obj
@@ -151,7 +169,6 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 
 				if update.is_updated_geometry:
 					update_obj_geom(zu_obj, update.id)
-					zu.obj_upload(zu_obj)
 
 				if update.is_updated_transform:
 					zu.obj_transform(zu_obj, mat(update.id.matrix_world))

@@ -55,7 +55,7 @@ static PyObject *scene_draw(PyObject *self, PyObject *args) {
 }
 
 static void obj_del(PyObject *pyobj) {
-	struct zu_obj *obj = PyCapsule_GetPointer(pyobj, SCENE_NAME);
+	struct zu_obj *obj = PyCapsule_GetPointer(pyobj, OBJ_NAME);
 	if (!obj) return;
 	zu_obj_del(obj);
 }
@@ -144,6 +144,20 @@ static PyObject *obj_upload(PyObject *self, PyObject *pyobj) {
 	return Py_None;
 }
 
+// Blender stuff that isn't wrapped in bpy
+void DRW_opengl_context_enable(void);
+void DRW_opengl_context_disable(void);
+
+static PyObject *blen_gl_enable(PyObject *self, PyObject *_) {
+	DRW_opengl_context_enable();
+	return Py_None;
+}
+
+static PyObject *blen_gl_disable(PyObject *self, PyObject *_) {
+	DRW_opengl_context_disable();
+	return Py_None;
+}
+
 PyMethodDef methods[] = {
 	{"scene_new", scene_new, METH_NOARGS, PyDoc_STR("Create a new Zu scene")},
 	{"scene_cam", scene_cam, METH_VARARGS, PyDoc_STR("Set the camera matrix of a Zu scene")},
@@ -154,6 +168,9 @@ PyMethodDef methods[] = {
 	{"obj_geom", obj_geom, METH_VARARGS, PyDoc_STR("Set the geometry of a Zu object. Takes a Zu object and a list of floats. Each sequence of 9 floats represents one triangle")},
 	{"obj_hide", obj_hide, METH_O, PyDoc_STR("Hide a Zu object from the render. This is provided because there is no way to safely delete an object from Python")},
 	{"obj_upload", obj_upload, METH_O, PyDoc_STR("Upload a Zu object to the GPU")},
+
+	{"blen_gl_enable", blen_gl_enable, METH_NOARGS, PyDoc_STR("Enable the Blender OpenGL context")},
+	{"blen_gl_disable", blen_gl_disable, METH_NOARGS, PyDoc_STR("Disable the Blender OpenGL context")},
 
 	{0},
 };

@@ -13,7 +13,7 @@ struct zu_scene {
 	mat44 cam;
 	GLuint vao, shader;
 	struct {
-		GLuint mvp;
+		GLint mvp;
 	} uniform;
 
 	// TODO: materials

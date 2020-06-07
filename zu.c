@@ -42,10 +42,10 @@ const char *vert_shader =
 
 const char *frag_shader =
 	"#version 330 core\n"
-	"out vec3 color;\n"
+	"out vec4 color;\n"
 	"\n"
 	"void main() {\n"
-	"	color = vec3(1,1,1);\n"
+	"	color = vec4(1,1,1,1);\n"
 	"}\n";
 
 static GLuint compile_shader(GLuint shader, const char *src) {
@@ -78,7 +78,7 @@ static GLuint load_shaders(const char *vert_src, const char *frag_src) {
 	glLinkProgram(prog);
 
 	GLint result, log_len;
-	glGetProgramiv(prog, GL_COMPILE_STATUS, &result);
+	glGetProgramiv(prog, GL_LINK_STATUS, &result);
 	glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &log_len);
 
 	if (log_len > 0) {
@@ -117,6 +117,7 @@ struct zu_scene *zu_scene_new(void) {
 
 	set(scene->cam, mat44_id);
 	glGenVertexArrays(1, &scene->vao);
+
 	scene->shader = shader;
 	scene->uniform.mvp = glGetUniformLocation(scene->shader, "mvp");
 
@@ -131,18 +132,18 @@ void zu_scene_del(struct zu_scene *scene) {
 // Also should test whether reallocating to move the buffers closer together affects performance
 
 void zu_scene_draw(struct zu_scene *scene, GLuint fb) {
-	//glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fb);
-	//glClearColor(0,0,0,0);
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	glBindVertexArray(scene->vao);
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fb);
+
+	glClearColor(0,0,0,1);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// TODO: per-material shaders
 	glUseProgram(scene->shader);
 
+	glEnableVertexAttribArray(0);
 	for (size_t i = 0; i < scene->n_objects; i++) {
-		glEnableVertexAttribArray(0);
-
 		struct zu_obj *obj = scene->objects[i];
 
 		mat44 mvp;
@@ -152,9 +153,8 @@ void zu_scene_draw(struct zu_scene *scene, GLuint fb) {
 		glBindBuffer(GL_ARRAY_BUFFER, obj->vtx_buf);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 		glDrawArrays(GL_TRIANGLES, 0, 3 * obj->n_triangles);
-
-		glDisableVertexAttribArray(0);
 	}
+	glDisableVertexAttribArray(0);
 
 }
 

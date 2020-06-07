@@ -5,6 +5,20 @@ import ext_zu as zu
 def mat(m):
 	return [c for v in m for c in v]
 
+def glerr(msg="OpenGL error"):
+	err = bgl.glGetError()
+	if err == 0:
+		return
+
+	glmsg = {
+		bgl.GL_INVALID_ENUM: "invalid enum",
+		bgl.GL_INVALID_VALUE: "invalid value",
+		bgl.GL_INVALID_OPERATION: "invalid operation",
+		bgl.GL_INVALID_FRAMEBUFFER_OPERATION: "invalid framebuffer operation",
+		bgl.GL_OUT_OF_MEMORY: "out of memory",
+	}.get(err, "unknown ({:x})".format(err))
+	raise RuntimeError(msg + ": " + glmsg)
+
 class ZuRenderEngine(bpy.types.RenderEngine):
 	bl_idname = 'ZU'
 	bl_label = 'Zu'
@@ -40,52 +54,76 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 	def render(self, dg):
 		scene = dg.scene
 		scale = scene.render.resolution_percentage / 100.0
-		width = scene.render.resolution_x * scale
-		height = scene.render.resolution_y * scale
+		width = int(scene.render.resolution_x * scale)
+		height = int(scene.render.resolution_y * scale)
 
-		# Create drawing target
-		buf = bgl.Buffer(bgl.GL_UINT, 1)
-		bgl.glGenFramebuffers(1, buf)
-		fb = buf[0]
-		bgl.glBindFramebuffer(bgl.GL_FRAMEBUFFER, fb)
+		zu.blen_gl_enable()
 
-		bgl.glGenTextures(1, buf)
-		tex = buf[0]
-		bgl.glBindTexture(bgl.GL_TEXTURE_2D, tex)
-		bgl.glTexImage2D(bgl.GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT);
-		bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_NEAREST);
-		bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_NEAREST);
+		try:
+			# Create drawing target
+			buf = bgl.Buffer(bgl.GL_INT, 1)
+			bgl.glGenFramebuffers(1, buf)
+			fb = buf[0]
+			bgl.glBindFramebuffer(bgl.GL_FRAMEBUFFER, fb)
 
-		bgl.glFramebufferTexture(bgl.GL_FRAMEBUFFER, bgl.GL_COLOR_ATTACHMENT0, tex, 0);
+			bgl.glGenTextures(1, buf)
+			tex = buf[0]
+			bgl.glBindTexture(bgl.GL_TEXTURE_RECTANGLE, tex)
+			bgl.glTexImage2D(bgl.GL_TEXTURE_RECTANGLE, 0, bgl.GL_RGBA, width, height, 0, bgl.GL_RGBA, bgl.GL_FLOAT, None);
+			bgl.glTexParameteri(bgl.GL_TEXTURE_RECTANGLE, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_NEAREST);
+			bgl.glTexParameteri(bgl.GL_TEXTURE_RECTANGLE, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_NEAREST);
 
-		if bgl.glCheckFramebufferStatus(bgl.GL_FRAMEBUFFER) != bgl.GL_FRAMEBUFFER_COMPLETE:
-			raise RuntimeError("Could not initialize GL framebuffer")
+			bgl.glFramebufferTexture(bgl.GL_FRAMEBUFFER, bgl.GL_COLOR_ATTACHMENT0, tex, 0);
 
-		# Prep Zu scene
-		self.scene = zu.scene_new()
-		# TODO: camera
-		self.load_dg(dg)
+			status = bgl.glCheckFramebufferStatus(bgl.GL_FRAMEBUFFER)
+			if status == 0:
+				glerr("Could not get framebuffer status")
+			elif status != bgl.GL_FRAMEBUFFER_COMPLETE:
+				msg = {
+					bgl.GL_FRAMEBUFFER_UNDEFINED: "undefined",
+					bgl.GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT: "incomplete attachment",
+					bgl.GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT: "missing attachment",
+					bgl.GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER: "incomplete draw buffer",
+					bgl.GL_FRAMEBUFFER_UNSUPPORTED: "unsupported",
+					bgl.GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE: "incomplete multisample",
+					bgl.GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS: "incomplete layer targets",
+				}.get(status, "unknown ({:x})".format(status))
+				raise RuntimeError("Could not initialize GL framebuffer: " + msg)
 
-		# Render
-		bgl.glViewport(0,0,width,height)
-		zu.scene_draw(self.scene, fb)
+			# Prep Zu scene
+			self.scene = zu.scene_new()
+			view_mat = self.camera_model_matrix(scene.camera)
+			view_mat.invert()
+			win_mat = scene.camera.calc_matrix_camera(dg, x=width, y=height)
+			cam = win_mat @ view_mat
+			zu.scene_cam(self.scene, mat(cam))
+			self.load_dg(dg)
 
-		# Retrieve texture data
-		pixels = bgl.Buffer(bgl.GL_FLOAT, width*height*4)
-		bgl.glReadPixels(0, 0, width, height, bgl.GL_RGBA, bgl.GL_FLOAT, pixels)
+			# Render
+			bgl.glViewport(0,0,width,height)
+			zu.scene_draw(self.scene, fb)
 
-		# Clean up OpenGL stuff
-		bgl.glBindFramebuffer(bgl.GL_FRAMEBUFFER, 0)
-		buf[0] = tex
-		bgl.glDeleteTextures(1, buf)
-		buf[0] = fb
-		bgl.glDeleteFramebuffers(1, buf)
+			# Retrieve texture data
+			pixels = bgl.Buffer(bgl.GL_FLOAT, width*height*4)
+			bgl.glReadPixels(0, 0, width, height, bgl.GL_RGBA, bgl.GL_FLOAT, pixels)
 
-		# Copy pixel data to output
-		result = self.begin_result(0, 0, width, height)
-		layer = result.layers[0].passes["Combined"]
-		layer.rect = pixels
-		self.end_result(result)
+			# Clean up OpenGL stuff
+			buf[0] = tex
+			bgl.glDeleteTextures(1, buf)
+			buf[0] = fb
+			bgl.glDeleteFramebuffers(1, buf)
+
+			# Copy pixel data to output
+			result = self.begin_result(0, 0, width, height)
+			layer = result.layers[0].passes["Combined"]
+			pixels = pixels.to_list()
+			layer.rect = list(zip(*[pixels[i::4] for i in range(4)])) # FIXME: holy fuck this is slow
+			self.end_result(result)
+
+		finally:
+			zu.blen_gl_disable()
+			self.scene = None
+			self.objects = None
 
 	def view_update(self, ctx, dg):
 		if self.scene is None:
@@ -96,6 +134,9 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 				pass
 
 	def view_draw(self, ctx, dg):
+		if self.scene is None:
+			return
+
 		#region = ctx.region
 		region3d = ctx.region_data
 		self.bind_display_space_shader(dg.scene)

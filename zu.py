@@ -19,6 +19,22 @@ def glerr(msg="OpenGL error"):
 	}.get(err, "unknown ({:x})".format(err))
 	raise RuntimeError(msg + ": " + glmsg)
 
+def obj_has_mesh(obj):
+	return obj.type in ['MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'VOLUME']
+
+def update_obj_geom(zu_obj, bl_obj):
+	mesh = bl_obj.to_mesh()
+	mesh.calc_loop_triangles()
+
+	vertices = []
+	for tri in mesh.loop_triangles:
+		for i in tri.loops:
+			loop = mesh.loops[i]
+			vert = mesh.vertices[loop.vertex_index]
+			vertices += list(vert.co)
+
+	zu.obj_geom(zu_obj, vertices)
+
 class ZuRenderEngine(bpy.types.RenderEngine):
 	bl_idname = 'ZU'
 	bl_label = 'Zu'
@@ -31,24 +47,14 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 	def load_dg(self, dg):
 		self.objects = {}
 		for obj in dg.objects:
-			if obj.type not in ['MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'VOLUME']:
+			if not obj_has_mesh(obj):
 				continue
 
 			zu_obj = zu.obj_new(self.scene)
 
-			mesh = obj.to_mesh()
-			mesh.calc_loop_triangles()
-
-			vertices = []
-			for tri in mesh.loop_triangles:
-				for i in tri.loops:
-					loop = mesh.loops[i]
-					vert = mesh.vertices[loop.vertex_index]
-					vertices += list(vert.co)
-
-			zu.obj_geom(zu_obj, vertices)
-			zu.obj_transform(zu_obj, mat(obj.matrix_world))
+			update_obj_geom(zu_obj, obj)
 			zu.obj_upload(zu_obj)
+			zu.obj_transform(zu_obj, mat(obj.matrix_world))
 			self.objects[obj.name_full] = zu_obj
 
 	def render(self, dg):
@@ -131,7 +137,23 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 			self.load_dg(dg)
 		else:
 			for update in dg.updates:
-				pass
+				if not isinstance(update.id, bpy.types.Object):
+					continue
+
+				if not obj_has_mesh(update.id):
+					continue
+
+				if update.id.name_full not in self.objects:
+					self.objects[update.id.name_full] = zu.obj_new(self.scene)
+
+				zu_obj = self.objects[update.id.name_full]
+
+				if update.is_updated_geometry:
+					update_obj_geom(zu_obj, update.id)
+					zu.obj_upload(zu_obj)
+
+				if update.is_updated_transform:
+					zu.obj_transform(zu_obj, mat(update.id.matrix_world))
 
 	def view_draw(self, ctx, dg):
 		if self.scene is None:

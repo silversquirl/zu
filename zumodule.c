@@ -123,6 +123,31 @@ static PyObject *obj_geom(PyObject *self, PyObject *args) {
 	return Py_None;
 }
 
+static PyObject *obj_color(PyObject *self, PyObject *args) {
+	PyObject *pyobj, *color;
+	if (!PyArg_ParseTuple(args, "OO", &pyobj, &color)) return NULL;
+
+	struct zu_obj *obj = PyCapsule_GetPointer(pyobj, OBJ_NAME);
+	if (!obj) return NULL;
+
+	Py_ssize_t color_len = PyList_Size(color);
+	if (color_len < 0) return NULL;
+
+	if (color_len != 4) {
+		PyErr_Format(PyExc_ValueError, "Length of `color' should be 4, got %d", color_len);
+		return NULL;
+	}
+
+	for (Py_ssize_t i = 0; i < color_len; i++) {
+		PyObject *item = PyList_GET_ITEM(color, i);
+		double value = PyFloat_AsDouble(item);
+		if (value == -1.0 && PyErr_Occurred()) return NULL;
+		obj->color[i] = value;
+	}
+
+	return Py_None;
+}
+
 static PyObject *obj_hide(PyObject *self, PyObject *pyobj) {
 	struct zu_obj *obj = PyCapsule_GetPointer(pyobj, OBJ_NAME);
 	if (!obj) return NULL;
@@ -166,6 +191,7 @@ PyMethodDef methods[] = {
 	{"obj_new", obj_new, METH_O, PyDoc_STR("Create a new Zu object linked to the specified scene")},
 	{"obj_transform", obj_transform, METH_VARARGS, PyDoc_STR("Set the transformation of a Zu object")},
 	{"obj_geom", obj_geom, METH_VARARGS, PyDoc_STR("Set the geometry of a Zu object. Takes a Zu object and a list of floats. Each sequence of 9 floats represents one triangle")},
+	{"obj_color", obj_color, METH_VARARGS, PyDoc_STR("Set the object color of a Zu object")},
 	{"obj_hide", obj_hide, METH_O, PyDoc_STR("Hide a Zu object from the render. This is provided because there is no way to safely delete an object from Python")},
 	{"obj_upload", obj_upload, METH_O, PyDoc_STR("Upload a Zu object to the GPU")},
 

@@ -5,6 +5,7 @@
 
 typedef GLfloat mat44[4*4];
 typedef GLfloat vec3[3];
+typedef GLfloat vec4[4];
 
 struct zu_scene {
 	struct zu_obj **objects;
@@ -13,7 +14,7 @@ struct zu_scene {
 	mat44 cam;
 	GLuint vao, shader;
 	struct {
-		GLint mvp;
+		GLint mvp, obj_color;
 	} uniform;
 
 	// TODO: materials
@@ -34,7 +35,8 @@ struct zu_obj {
 	size_t n_triangles;
 	GLuint vtx_buf;
 
-	// TODO: object color
+	vec4 color;
+
 	// TODO: materials
 	// TODO: UVs
 	// TODO: vertex color

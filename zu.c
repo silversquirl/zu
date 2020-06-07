@@ -16,8 +16,9 @@ const mat44 mat44_id = {
 
 // Can't assign matrices/vectors normally, so we need special macros for it
 #define set(dest, src) memcpy(dest, src, sizeof (src)) // Generic
-#define setm(dest, src) memcpy(dest, (mat44)src, sizeof (mat44)) // mat44 literal
-#define setv(dest, src) memcpy(dest, (vec3)src, sizeof (vec3)) // vec3 literal
+#define setm4(dest, ...) memcpy(dest, (mat44)__VA_ARGS__, sizeof (mat44)) // mat44 literal
+#define setv3(dest, ...) memcpy(dest, (vec3)__VA_ARGS__, sizeof (vec3)) // vec3 literal
+#define setv4(dest, ...) memcpy(dest, (vec4)__VA_ARGS__, sizeof (vec4)) // vec4 literal
 
 static void matmul(mat44 m, mat44 a, mat44 b) {
 	for (int i = 0; i < 4; i++) {
@@ -42,10 +43,11 @@ const char *vert_shader =
 
 const char *frag_shader =
 	"#version 330 core\n"
+	"uniform vec4 obj_color;\n"
 	"out vec4 color;\n"
 	"\n"
 	"void main() {\n"
-	"	color = vec4(1,1,1,1);\n"
+	"	color = obj_color;\n"
 	"}\n";
 
 static GLuint compile_shader(GLuint shader, const char *src) {
@@ -120,6 +122,7 @@ struct zu_scene *zu_scene_new(void) {
 
 	scene->shader = shader;
 	scene->uniform.mvp = glGetUniformLocation(scene->shader, "mvp");
+	scene->uniform.obj_color = glGetUniformLocation(scene->shader, "obj_color");
 
 	return scene;
 }
@@ -149,6 +152,7 @@ void zu_scene_draw(struct zu_scene *scene, GLuint fb) {
 		mat44 mvp;
 		matmul(mvp, scene->cam, obj->transform);
 		glUniformMatrix4fv(scene->uniform.mvp, 1, GL_FALSE, mvp);
+		glUniform4fv(scene->uniform.obj_color, 1, obj->color);
 
 		glBindBuffer(GL_ARRAY_BUFFER, obj->vtx_buf);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -180,6 +184,7 @@ struct zu_obj *zu_obj_new(struct zu_scene *scene) {
 	obj->n_triangles = 0;
 	obj->triangles = NULL;
 	obj->vtx_buf = 0;
+	setv4(obj->color, {1,1,1,1});
 
 	return obj;
 }

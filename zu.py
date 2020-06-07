@@ -44,19 +44,6 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 		self.scene = None
 		self.objects = None
 
-	def load_dg(self, dg):
-		self.objects = {}
-		for obj in dg.objects:
-			if not obj_has_mesh(obj):
-				continue
-
-			zu_obj = zu.obj_new(self.scene)
-
-			update_obj_geom(zu_obj, obj)
-			zu.obj_upload(zu_obj)
-			zu.obj_transform(zu_obj, mat(obj.matrix_world))
-			self.objects[obj.name_full] = zu_obj
-
 	def render(self, dg):
 		scene = dg.scene
 		scale = scene.render.resolution_percentage / 100.0
@@ -131,6 +118,20 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 			self.scene = None
 			self.objects = None
 
+	def load_dg(self, dg):
+		self.objects = {}
+		for obj in dg.objects:
+			if not obj_has_mesh(obj):
+				continue
+
+			zu_obj = zu.obj_new(self.scene)
+
+			update_obj_geom(zu_obj, obj)
+			zu.obj_upload(zu_obj)
+			zu.obj_transform(zu_obj, mat(obj.matrix_world))
+			zu.obj_color(zu_obj, list(obj.color))
+			self.objects[obj.name_full] = zu_obj
+
 	def view_update(self, ctx, dg):
 		if self.scene is None:
 			self.scene = zu.scene_new()
@@ -155,21 +156,17 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 				if update.is_updated_transform:
 					zu.obj_transform(zu_obj, mat(update.id.matrix_world))
 
+				zu.obj_color(zu_obj, list(update.id.color))
+
 	def view_draw(self, ctx, dg):
 		if self.scene is None:
 			return
 
-		#region = ctx.region
-		region3d = ctx.region_data
-		self.bind_display_space_shader(dg.scene)
-
 		buf = bgl.Buffer(bgl.GL_INT, 1)
 		bgl.glGetIntegerv(bgl.GL_DRAW_FRAMEBUFFER_BINDING, buf)
-		cam = region3d.perspective_matrix
+		cam = ctx.region_data.perspective_matrix
 		zu.scene_cam(self.scene, mat(cam))
 		zu.scene_draw(self.scene, buf[0])
-
-		self.unbind_display_space_shader()
 
 def compatible_panels():
 	incompatible_panels = {

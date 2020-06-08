@@ -199,6 +199,8 @@ void zu_scene_draw(struct zu_scene *scene, GLuint fb) {
 		glDrawArrays(GL_TRIANGLES, 0, 3 * obj->n_triangles);
 	}
 	for (int i = 0; i < ZU_VERT_ARRAYS; i++) glDisableVertexAttribArray(i);
+
+	glDisable(GL_DEPTH_TEST);
 }
 
 struct zu_obj *zu_obj_new(struct zu_scene *scene) {

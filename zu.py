@@ -65,6 +65,10 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 		self.dim = None
 
 	def __del__(self):
+		if not hasattr(self, "scene"):
+			# Sometimes it's not properly initialized for some reason
+			return
+
 		self.delfb()
 		del self.objects
 		del self.scene
@@ -106,9 +110,6 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 			raise RuntimeError("Could not initialize GL framebuffer: " + msg)
 
 	def delfb(self):
-		if not hasattr(self, "fb"):
-			return
-
 		buf = bgl.Buffer(bgl.GL_INT, 1)
 
 		if self.vtx_buf is not None:
@@ -256,6 +257,16 @@ class ZuRenderEngine(bpy.types.RenderEngine):
 					zu.obj_transform(zu_obj, mat(update.id.matrix_world))
 
 				zu.obj_color(zu_obj, list(update.id.color))
+
+			removed = []
+			if dg.id_type_updated('OBJECT'):
+				for k, obj in self.objects.items():
+					if k not in dg.objects:
+						zu.obj_hide(self.objects[k]) # In case it's not deleted immediately
+						removed.append(k)
+			for k in removed:
+				del self.objects[k]
+
 		self.view_draw(ctx, dg)
 
 	def view_draw(self, ctx, dg):

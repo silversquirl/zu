@@ -235,15 +235,8 @@ struct zu_obj *zu_obj_new(struct zu_scene *scene) {
 }
 
 void zu_obj_del(struct zu_obj *obj) {
+	// Remove object from scene
 	struct zu_scene *scene = obj->scene;
-
-	if (obj->vert_buf) glDeleteBuffers(1, &obj->vert_buf);
-	if (obj->vert) free(obj->vert);
-	if (obj->vert_clr_buf) glDeleteBuffers(1, &obj->vert_clr_buf);
-	if (obj->vert_clr) free(obj->vert_clr);
-	free(obj);
-
-	scene->n_objects--;
 	struct zu_obj **p = scene->objects + scene->n_objects, *prev = NULL, *tmp;
 	while (--p >= scene->objects) {
 		tmp = *p;
@@ -252,6 +245,14 @@ void zu_obj_del(struct zu_obj *obj) {
 
 		if (prev == obj) break;
 	}
+	scene->n_objects--;
+
+	// Delete object
+	if (obj->vert_buf) glDeleteBuffers(1, &obj->vert_buf);
+	if (obj->vert) free(obj->vert);
+	if (obj->vert_clr_buf) glDeleteBuffers(1, &obj->vert_clr_buf);
+	if (obj->vert_clr) free(obj->vert_clr);
+	free(obj);
 }
 
 // n_triangles * 3 vertices * n components * GLfloat
